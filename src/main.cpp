@@ -1,8 +1,8 @@
 #include <iostream>
-#include "Station.hpp"
-#include "Train.hpp"
-#include "Route.hpp"
-#include "CLI.hpp"
+#include "../include/Train.hpp"
+#include "../include/Route.hpp"
+#include "../include/Station.hpp"
+#include "../include/CLI.hpp"
 
 namespace CJ {
 

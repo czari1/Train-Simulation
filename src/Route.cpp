@@ -1,6 +1,6 @@
-#include "Route.hpp"
-#include "Station.hpp"
-#include "Train.hpp"
+#include "../include/Train.hpp"
+#include "../include/Route.hpp"
+#include "../include/Station.hpp"
 #include <iostream>
 
 namespace CJ {
