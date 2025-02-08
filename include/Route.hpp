@@ -5,19 +5,13 @@
  * The class provides functionality to manage route details, including departure and arrival times,
  * train associations, intermediate stops, and route duration.
  * 
- * @author [Cezary Jaros]
- * @date [09.01.2025]
  */
-
 
 #pragma once
 #include <string>
 #include <vector>
 #include <iostream>
-#include <fstream>
-#include <sstream>
-#include "Station.hpp"
-#include "Train.hpp"
+#include <stdexcept>
 
 namespace CJ {
 class Station;
@@ -69,19 +63,43 @@ public:
 
     
     void setDepartureTimeHour(int departureTimeHour) {
+    if (departureTimeHour < 0 || departureTimeHour > 23) {
+        std::cerr << "Departure hour must be between 0 and 23\n";
+        throw std::invalid_argument("Departure hour must be between 0 and 23");
+    }
         m_departureTimeHour = departureTimeHour;
     }
 
     void setDepartureTimeMinute(int departureTimeMinute) {
+        if (departureTimeMinute < 0 || departureTimeMinute > 59) {
+            std::cerr << "Departure minute must be between 0 and 59\n";
+            throw std::invalid_argument("Departure minute must be between 0 and 59");
+        }
         m_departureTimeMinute = departureTimeMinute;
     }
 
     void setArrivalTimeHour(int arrivalTimeHour) {
+        if (arrivalTimeHour < 0 || arrivalTimeHour > 23) {
+            std::cerr << "Arrival hour must be between 0 and 23\n";
+            throw std::invalid_argument("Arrival hour must be between 0 and 23");
+        }
         m_arriveTimeHour = arrivalTimeHour;
     }
 
     void setArrivalTimeMinute(int arrivalTimeMinute) {
+        if (arrivalTimeMinute < 0 || arrivalTimeMinute > 59) {
+            std::cerr << "Arrival minute must be between 0 and 59\n";
+            throw std::invalid_argument("Arrival minute must be between 0 and 59");
+        }
         m_arriveTimeMinute = arrivalTimeMinute;
+    }
+
+    void setDuration(int duration) {
+        if (duration <= 0) {
+            std::cerr << "Duration must be greater than 0\n";
+            throw std::invalid_argument("Duration must be greater than 0");
+        }
+        m_duration = duration;
     }
 
     void setTrainName(Train* trainName) {
@@ -94,10 +112,6 @@ public:
 
     void setEndStation(Train* endStation) {
         m_endStation = endStation;
-    }
-
-    void setDuration(int duration) {
-        m_duration = duration;
     }
 
     void setIntermediateStops(std::vector<std::string> intermediateStops) {
@@ -146,25 +160,6 @@ public:
 
     int calculateTravelTime() const {
         return m_duration + m_intermediateStops.size() * 3;
-    }
-
-    /**
-     * @brief Display detailed information about the route
-     * Prints departure time, arrival time, duration and all intermediate stops
-     */
-
-    void displayRoute() const {
-        std::cout << "Route Information:\n"
-                 << "Departure Time: " << m_departureTimeHour << ":"
-                 << m_departureTimeMinute << "\n"
-                 << "Arrival Time: " << m_arriveTimeHour << ":"
-                 << m_arriveTimeMinute << "\n"
-                 << "Duration: " << m_duration << " minutes\n"
-                 << "Intermediate Stops:\n";
-        
-        for (const auto& stop : m_intermediateStops) {
-            std::cout << "- " << stop << "\n";
-        }
     }
 };
 

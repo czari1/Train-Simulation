@@ -2,6 +2,7 @@
 #include "../include/Route.hpp"
 #include "../include/Station.hpp"
 #include <iostream>
+#include "../include/Management.hpp"
 
 namespace CJ {
 

@@ -1,13 +1,6 @@
 /**
  * @file CLI.hpp
  * @brief Header file for the Command Line Interface (CLI) class for managing trains, stations, and routes.
- * 
- * This file provides the declaration of the `CLI` class, which serves as the entry point
- * for the Train Management System. The `CLI` class provides menus and functionality for
- * performing operations on trains, stations, and routes.
- * 
- * @author [Cezary Jaros]
- * @date [09.01.2025]
  */
 
 #pragma once
@@ -17,33 +10,12 @@
 #include "Train.hpp"
 #include "Station.hpp"
 #include "Route.hpp"
+#include "Management.hpp"
 
 namespace CJ {
-/**
- * @brief Predefined route instances.
- */
-extern Route routeInstance1;
-extern Route routeInstance2;
-extern Route routeInstance3;
-
-/**
- * @class CLI
- * @brief Provides a command-line interface for train, station, and route management.
- * 
- * This class handles user input and delegates operations to other modules such as Train,
- * Station, and Route. It includes menus and methods for handling user interactions.
- */
 
 class CLI {
 private:
-
-    /**
-     * @brief Reads an integer input from the user.
-     * 
-     * Prompts the user until a valid integer input is entered.
-     * @return Validated integer input from the user.
-     */
-
     static int getIntInput() {
         int input;
         while (!(std::cin >> input)) {
@@ -55,28 +27,68 @@ private:
         return input;
     }
 
-    /**
-     * @brief Reads a string input from the user.
-     * 
-     * Captures a line of text entered by the user.
-     * @return String input from the user.
-     */
-
     static std::string getStringInput() {
-        std::string input;
-        std::getline(std::cin, input);
+        while(true){
+            std::string input;
+            if (std::cin >> input) {
+                return input;
+            } else {
+                std::cin.clear();
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                std::cout << "Invalid input. Please enter a valid string: ";
+            }
+        }
+    }
+    
+    static void getValidIntInput(int min, int max, int& input) {
+        while(true){
+            if (std::cin >> input && input>=min && input<=max) {
+                break;
+            } else {
+                std::cout << "Invalid input. Please enter a number between " << min << " and " << max << ": ";
+                std::cin.clear();
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            }
+        }
+    }
+
+    static int getValidPositiveInt() {
+        int input;
+        while (true) {
+            if (std::cin >> input && input >= 0) {
+                break;
+            } else {
+                std::cin.clear();
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                std::cout << "Invalid input. Please enter a positive number: ";
+            }
+        }
         return input;
     }
 
+    
+
+    static int getNewValidId() {
+        int id;
+        while (true) {
+            if (std::cin >> id && id > 0) {
+                auto it = std::find_if(CJ::Management::m_trains.begin(), CJ::Management::m_trains.end(),
+                                    [id](const Train& train) { return train.getId() == id; });
+                if (it == CJ::Management::m_trains.end()) {
+                    break;
+                } else {
+                    std::cout << "Train with ID " << id << " already exists. Please enter a new ID: ";
+                }
+            } else {
+                std::cin.clear();
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                std::cout << "Invalid input. Please enter a positive number: ";
+            }
+        }
+        return id;
+    }
+
 public:
-
-    /**
-     * @brief Displays the main menu of the application.
-     * 
-     * Provides options for train operations, station operations, route operations, 
-     * and exiting the application.
-     */
-
     static void displayMainMenu() {
         std::cout << "\n=== Train Management System ===\n"
                  << "1. Train Operations\n"
@@ -85,12 +97,6 @@ public:
                  << "4. Exit\n"
                  << "Enter your choice (1-4): ";
     }
-
-    /**
-     * @brief Handles train-related operations.
-     * 
-     * Allows the user to add, delete, and display information about trains.
-     */
 
     static void handleTrainOperations() {
         while (true) {
@@ -107,27 +113,27 @@ public:
                     std::cout << "Enter train name: ";
                     std::string name = getStringInput();
                     std::cout << "Enter train speed (km/h): ";
-                    int speed = getIntInput();
+                    int speed = getValidPositiveInt();
                     std::cout << "Enter train capacity: ";
-                    int capacity = getIntInput();
+                    int capacity = getValidPositiveInt();
                     std::cout << "Enter train ID: ";
-                    int id = getIntInput();
+                    int id = getNewValidId();
                     std::cout << "Enter start station: ";
                     std::string startStation = getStringInput();
                     std::cout << "Enter end station: ";
                     std::string endStation = getStringInput();
                     std::cout << "Enter wagon count: ";
-                    int wagonCount = getIntInput();
+                    int wagonCount = getValidPositiveInt();
 
-                    Train::addTrain(name, speed, capacity, id, startStation, endStation, 
-                                  wagonCount, nullptr, nullptr, nullptr, nullptr);
+                    CJ::Management::addTrain(name, speed, capacity, id, startStation, endStation, 
+                                          wagonCount, nullptr, nullptr, nullptr, nullptr);
                     std::cout << "Train added successfully!\n";
                     break;
                 }
                 case 2: {
                     std::cout << "Enter train ID to delete: ";
                     int id = getIntInput();
-                    if (Train::deleteTrain(id)) {
+                    if (CJ::Management::deleteTrain(id)) {
                         std::cout << "Train deleted successfully!\n";
                     } else {
                         std::cout << "Train not found.\n";
@@ -137,7 +143,7 @@ public:
                 case 3: {
                     std::cout << "Enter train ID to display: ";
                     int id = getIntInput();
-                    Train::displayTrainInfo(id);
+                    CJ::Management::displayTrainInfo(id);
                     break;
                 }
                 case 4:
@@ -147,12 +153,6 @@ public:
             }
         }
     }
-
-    /**
-     * @brief Handles station-related operations.
-     * 
-     * Allows the user to add, remove, and display information about stations.
-     */
 
     static void handleStationOperations() {
         while (true) {
@@ -169,16 +169,16 @@ public:
                     std::cout << "Enter station name: ";
                     std::string name = getStringInput();
                     std::cout << "Enter platform count: ";
-                    int platformCount = getIntInput();
+                    int platformCount = getValidPositiveInt();
 
-                    Station::addStation(nullptr, platformCount, {}, nullptr, nullptr, name);
+                    CJ::Management::addStation(nullptr, platformCount, {}, nullptr, nullptr, name);
                     std::cout << "Station added successfully!\n";
                     break;
                 }
                 case 2: {
                     std::cout << "Enter station name to remove: ";
                     std::string name = getStringInput();
-                    if (Station::removeStation(name)) {
+                    if (CJ::Management::removeStation(name)) {
                         std::cout << "Station removed successfully!\n";
                     } else {
                         std::cout << "Station not found.\n";
@@ -188,7 +188,7 @@ public:
                 case 3: {
                     std::cout << "Enter station name to display: ";
                     std::string name = getStringInput();
-                    Station::displayStationInfo(name);
+                    CJ::Management::displayStationInfo(name);
                     break;
                 }
                 case 4:
@@ -198,12 +198,6 @@ public:
             }
         }
     }
-
-    /**
-     * @brief Handles route-related operations.
-     * 
-     * Provides options for displaying route information.
-     */
 
     static void handleRouteOperations() {
         while (true) {
@@ -215,10 +209,7 @@ public:
             int choice = getIntInput();
             switch (choice) {
                 case 1: {
-                    std::cout << "\nAvailable Routes:\n";
-                    routeInstance1.displayRoute();
-                    routeInstance2.displayRoute();
-                    routeInstance3.displayRoute();
+                    CJ::Management::displayAllRoutes();
                     break;
                 }
                 case 2:
@@ -228,13 +219,6 @@ public:
             }
         }
     }
-
-    /**
-     * @brief Starts the main execution loop of the CLI.
-     * 
-     * Displays the main menu and handles user input until the user chooses to exit.
-     */
-    
 
     static void run() {
         while (true) {
@@ -261,4 +245,4 @@ public:
     }
 };
 
-}
+} // namespace CJ

@@ -13,10 +13,7 @@
 #include <string>
 #include <vector>
 #include <iostream>
-#include <fstream>
-#include <sstream>
-#include "Train.hpp"
-#include "Route.hpp"
+#include <stdexcept>
 
 namespace CJ {
 class Route;
@@ -47,15 +44,13 @@ public:
      * 
      * @param trainName Train associated with the station
      * @param platformCount Number of platforms at the station
-     * @param schedule Schedule of the station
      * @param intermediateStops Intermediate stops at the station
      * @param startStation Start station of the route
      * @param endStation End station of the route
      * @param name Name of the station
      */
 
-    Station(Train* trainName = nullptr, int platformCount = 0, 
-        const std::vector<Route*>& schedule = {}, 
+    Station(Train* trainName = nullptr, int platformCount = 0,  
         const std::vector<Route*>& intermediateStops = {}, 
         Train* startStation = 0 , 
         Train* endStation = 0 ,
@@ -72,8 +67,12 @@ public:
     }
 
     void setPlatformCount(int platformCount) {
-        m_platformCount = platformCount;
+    if (platformCount <= 0) {
+        std::cerr << "Platform count must be greater than 0\n";
+        throw std::invalid_argument("Platform count must be greater than 0");
     }
+    m_platformCount = platformCount;
+}
 
     void setIntermediateStops(std::vector<Route*> intermiediateStops) {
         m_intermediateStops = intermiediateStops;
@@ -85,6 +84,10 @@ public:
 
     void setEndStation(Train* endStation) {
         m_endStation = endStation;
+    }
+
+    void setName(const std::string& name) {
+        m_name = name;
     }
 
     Train* getTrainName() const {
@@ -107,70 +110,9 @@ public:
         return m_endStation;
     }
 
-    /**
-     * @brief Add a new station to the system.
-     * 
-     * @param trainName Train associated with the station
-     * @param platformCount Number of platforms at the station
-     * @param intermediateStops Intermediate stops at the station
-     * @param startStation Start station of the route
-     * @param endStation End station of the route
-     * @param name Name of the station
-     */
-
-    static void addStation(Train* trainName, int platformCount,
-                         const std::vector<Route*>& intermediateStops,
-                         Train* startStation, Train* endStation,
-                         const std::string& name) {
-        Station newStation(trainName, platformCount, {}, intermediateStops,
-                         startStation, endStation, name);
-        m_stations.push_back(newStation);
-    }
-
-    /**
-     * @brief Remove a station from the system.
-     * 
-     * @param name Name of the station to remove
-     * @return true if the station was removed successfully
-     * @return false if the station was not found
-     */
-
-    static bool removeStation(const std::string& name) {
-        auto it = std::find_if(m_stations.begin(), m_stations.end(),
-                              [&name](const Station& station) {
-                                  return station.getName() == name;
-                              });
-        if (it != m_stations.end()) {
-            m_stations.erase(it);
-            return true;
-        }
-        return false;
-    }
-
-    /**
-     * @brief Display information about a station.
-     * 
-     * @param name Name of the station to display
-     */
-
-    static void displayStationInfo(const std::string& name) {
-        auto it = std::find_if(m_stations.begin(), m_stations.end(),
-                              [&name](const Station& station) {
-                                  return station.getName() == name;
-                              });
-        if (it != m_stations.end()) {
-            std::cout << "Station Information:\n"
-                     << "Name: " << it->getName() << "\n"
-                     << "Platform Count: " << it->getPlatformCount() << "\n"
-                     << "Intermediate Stops Count: "
-                     << it->getIntermediateStops().size() << "\n";
-        } else {
-            std::cout << "Station with name " << name << " not found.\n";
-        }
-    }
-
     std::string getName() const {
         return m_name;
     }
+
 };
 }

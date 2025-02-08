@@ -1,4 +1,3 @@
-
 /**
  * @file Train.hpp
  * @brief Header file for the Train class.
@@ -7,19 +6,13 @@
  * The class provides functionality to manage train details, including train name, speed,
  * capacity, start and end stations, departure and arrival times, and wagon count.
  * 
- * @author [Cezary Jaros]
- * @date [09.01.2025]
  */
 
 #pragma once
 #include <string>
 #include <vector>
 #include <iostream>
-#include <fstream>
-#include <sstream>
-#include <algorithm>
-#include "Station.hpp"
-#include "Route.hpp"
+#include <stdexcept>
 
 namespace CJ {
 class Route;
@@ -68,7 +61,7 @@ public:
      */
 
     Train(const std::string& trainName = "", int speed = 0, int capacity = 0, int id = 0, 
-          std::string startStation = nullptr, std::string endStation = nullptr, 
+          std::string startStation = "", std::string endStation = "", 
           int wagonCount = 0, Route* departureTimeHour = nullptr,
           Route* departureTimeMinute = nullptr, Route* arrivalTimeHour = nullptr,
           Route* arrivalTimeMinute = nullptr)
@@ -83,16 +76,40 @@ public:
     }
 
     void setSpeed(int speed) {
+    if (speed > 0) {
         m_speed = speed;
+    } else {
+        std::cerr << "Speed must be greater than 0\n";
+        throw std::invalid_argument("Speed must be greater than 0");
     }
+}
 
-    void setCapacity(int capacity) {
+void setCapacity(int capacity) {
+    if (capacity > 0) {
         m_capacity = capacity;
+    } else {
+        std::cerr << "Capacity must be greater than 0\n";
+        throw std::invalid_argument("Capacity must be greater than 0");
     }
+}
 
-    void setId(int id) {
+void setId(int id) {
+    if (id > 0) {
         m_id = id;
+    } else {
+        std::cerr << "ID must be greater than 0\n";
+        throw std::invalid_argument("ID must be greater than 0");
     }
+}
+
+void setWagonCount(int wagonCount) {
+    if (wagonCount > 0) {
+        m_wagonCount = wagonCount;
+    } else {
+        std::cerr << "Wagon count must be greater than 0\n";
+        throw std::invalid_argument("Wagon count must be greater than 0");
+    }
+}
 
     void setStartStation(std::string startStation) {
         m_startStation = startStation;
@@ -100,10 +117,6 @@ public:
 
     void setEndStation(std::string endStation) {
         m_endStation = endStation;
-    }
-
-    void setWagonCount(int wagonCount) {
-        m_wagonCount = wagonCount;
     }
 
     void setDepartureTimeHour(Route* departureTimeHour) {
@@ -164,72 +177,6 @@ public:
 
     Route* getArrivalTimeMinute() const {
         return m_arrivalTimeMinute;
-    }
-    
-
-    /**
-     * @brief Add a new train to the system.
-     * 
-     * @param trainName Name of the train
-     * @param speed Speed of the train in km/h
-     * @param capacity Passenger capacity of the train
-     * @param id Unique identifier for the train
-     * @param startStation Start station of the train
-     * @param endStation End station of the train
-     * @param wagonCount Number of wagons on the train
-     * @param depHour Departure hour
-     * @param depMin Departure minute
-     * @param arrHour Arrival hour
-     * @param arrMin Arrival minute
-     */
-        
-    static void addTrain(const std::string& trainName, int speed, int capacity, int id,
-                        const std::string& startStation, const std::string& endStation,
-                        int wagonCount, Route* depHour, Route* depMin,
-                        Route* arrHour, Route* arrMin) {
-        Train newTrain(trainName, speed, capacity, id, startStation, endStation,
-                      wagonCount, depHour, depMin, arrHour, arrMin);
-        m_trains.push_back(newTrain);
-    }
-
-    /**
-     * @brief Delete a train from the system.
-     * 
-     * @param id ID of the train to delete
-     * @return true if the train was deleted successfully
-     */
-
-    static bool deleteTrain(int id) {
-        auto it = std::find_if(m_trains.begin(), m_trains.end(),
-                              [id](const Train& train) { return train.getId() == id; });
-        if (it != m_trains.end()) {
-            m_trains.erase(it);
-            return true;
-        }
-        return false;
-    }
-
-    /**
-     * @brief Display detailed information about a train.
-     * 
-     * @param id ID of the train to display
-     */
-
-    static void displayTrainInfo(int id) {
-        auto it = std::find_if(m_trains.begin(), m_trains.end(),
-                              [id](const Train& train) { return train.getId() == id; });
-        if (it != m_trains.end()) {
-            std::cout << "Train Information:\n"
-                     << "Name: " << it->getTrainName() << "\n"
-                     << "ID: " << it->getId() << "\n"
-                     << "Speed: " << it->getSpeed() << " km/h\n"
-                     << "Capacity: " << it->getCapacity() << " passengers\n"
-                     << "Start Station: " << it->getStartStation() << "\n"
-                     << "End Station: " << it->getEndStation() << "\n"
-                     << "Wagon Count: " << it->getWagonCount() << "\n";
-        } else {
-            std::cout << "Train with ID " << id << " not found.\n";
-        }
     }
 };
 
