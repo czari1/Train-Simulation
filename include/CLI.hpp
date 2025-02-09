@@ -7,6 +7,7 @@
 #include <string>
 #include <iostream>
 #include <limits>
+#include <functional>
 #include "Train.hpp"
 #include "Station.hpp"
 #include "Route.hpp"
@@ -28,16 +29,9 @@ private:
     }
 
     static std::string getStringInput() {
-        while(true){
-            std::string input;
-            if (std::cin >> input) {
-                return input;
-            } else {
-                std::cin.clear();
-                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-                std::cout << "Invalid input. Please enter a valid string: ";
-            }
-        }
+        std::string input;
+        std::getline(std::cin, input);
+        return input;
     }
     
     static void getValidIntInput(int min, int max, int& input) {
@@ -66,7 +60,13 @@ private:
         return input;
     }
 
-    
+    template <typename T>
+        static void displayUsedObjects(const std::string& prompt, const std::vector<T>& collection, std::function<std::string(const T&)> getIdFunc) {
+        std::cout << prompt << std::endl;
+            for (const auto& item : collection) {
+                std::cout << formatStationName(getIdFunc(item)) << "\n";
+            }
+    }
 
     static int getNewValidId() {
         int id;
@@ -86,6 +86,38 @@ private:
             }
         }
         return id;
+    }
+
+    static std::string formatStationName(const std::string& name) {
+        if (name.empty()) return name;
+        
+        std::string formattedName = name;
+        bool newWord = true;
+        
+        for (size_t i = 0; i < formattedName.length(); ++i) {
+            if (newWord) {
+                formattedName[i] = std::toupper(formattedName[i]);
+                newWord = false;
+            } else {
+                formattedName[i] = std::tolower(formattedName[i]);
+            }
+            if (formattedName[i] == ' ') {
+                newWord = true;
+            }
+        }
+        return formattedName;
+    }
+
+    static bool isStationNameTaken(const std::string& name) {
+        std::string formattedName = formatStationName(name);
+        return std::any_of(CJ::Management::m_stations.begin(), CJ::Management::m_stations.end(),
+            [&formattedName](const Station& station) {
+                return formatStationName(station.getName()) == formattedName;
+            });
+    }
+
+    static bool compareStationNames(const std::string& name1, const std::string& name2) {
+        return formatStationName(name1) == formatStationName(name2);
     }
 
 public:
@@ -110,6 +142,9 @@ public:
             int choice = getIntInput();
             switch (choice) {
                 case 1: {
+                    displayUsedObjects<Train>("Used Train IDs:", CJ::Management::m_trains, 
+                    [](const Train& train) { return std::to_string(train.getId()); });
+
                     std::cout << "Enter train name: ";
                     std::string name = getStringInput();
                     std::cout << "Enter train speed (km/h): ";
@@ -131,6 +166,9 @@ public:
                     break;
                 }
                 case 2: {
+                    displayUsedObjects<Train>("Train IDs possible do delete:", CJ::Management::m_trains, 
+                    [](const Train& train) { return std::to_string(train.getId()); });
+
                     std::cout << "Enter train ID to delete: ";
                     int id = getIntInput();
                     if (CJ::Management::deleteTrain(id)) {
@@ -141,6 +179,9 @@ public:
                     break;
                 }
                 case 3: {
+                    displayUsedObjects<Train>("Train IDs possible to display:", CJ::Management::m_trains, 
+                    [](const Train& train) { return std::to_string(train.getId()); });
+
                     std::cout << "Enter train ID to display: ";
                     int id = getIntInput();
                     CJ::Management::displayTrainInfo(id);
@@ -166,8 +207,17 @@ public:
             int choice = getIntInput();
             switch (choice) {
                 case 1: {
+                    displayUsedObjects<Station>("Used Station Names:", CJ::Management::m_stations, [](const Station& station) 
+                    { return station.getName(); });
+                    
                     std::cout << "Enter station name: ";
                     std::string name = getStringInput();
+
+                    if (isStationNameTaken(name)) {
+                        std::cout << "Station name already taken. Please enter a different name.\n";
+                        break;
+                    }
+
                     std::cout << "Enter platform count: ";
                     int platformCount = getValidPositiveInt();
 
@@ -176,9 +226,20 @@ public:
                     break;
                 }
                 case 2: {
+                    displayUsedObjects<Station>("Used Station Names:", CJ::Management::m_stations, [](const Station& station) 
+                    { return station.getName(); });
+
                     std::cout << "Enter station name to remove: ";
                     std::string name = getStringInput();
-                    if (CJ::Management::removeStation(name)) {
+
+                    auto it = std::find_if(CJ::Management::m_stations.begin(), 
+                                         CJ::Management::m_stations.end(),
+                                         [&name](const Station& station) {
+                                             return compareStationNames(station.getName(), name);
+                                         });
+                                         
+                    if (it != CJ::Management::m_stations.end()) {
+                        CJ::Management::m_stations.erase(it);
                         std::cout << "Station removed successfully!\n";
                     } else {
                         std::cout << "Station not found.\n";
@@ -186,9 +247,27 @@ public:
                     break;
                 }
                 case 3: {
+                    displayUsedObjects<Station>("Used Station Names:", CJ::Management::m_stations, 
+                        [](const Station& station) { return station.getName(); });
+                    
                     std::cout << "Enter station name to display: ";
                     std::string name = getStringInput();
-                    CJ::Management::displayStationInfo(name);
+                    
+                    auto it = std::find_if(CJ::Management::m_stations.begin(), 
+                                         CJ::Management::m_stations.end(),
+                                         [&name](const Station& station) {
+                                             return compareStationNames(station.getName(), name);
+                                         });
+                                         
+                    if (it != CJ::Management::m_stations.end()) {
+                        std::cout << "Station Information:\n"
+                                 << "Name: " << it->getName() << "\n"
+                                 << "Platform Count: " << it->getPlatformCount() << "\n"
+                                 << "Intermediate Stops Count: "
+                                 << it->getIntermediateStops().size() << "\n";
+                    } else {
+                        std::cout << "Station not found.\n";
+                    }
                     break;
                 }
                 case 4:
