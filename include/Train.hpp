@@ -40,7 +40,7 @@ private:
     Route* m_arrivalTimeHour;
     Route* m_arrivalTimeMinute;
 
-    static std::vector<Train> m_trains;
+    
 
 public:
 

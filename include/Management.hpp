@@ -18,6 +18,12 @@ private:
 
 public:
 
+    static inline void addRoute(int depHour, int depMin, int arrHour, int arrMin,Train& trainName, int duration,
+                         const std::vector<std::string>& intermediateStops) {
+        Route newRoute(depHour, depMin, arrHour, arrMin, nullptr, nullptr, nullptr, duration, intermediateStops);
+        m_routes.push_back(newRoute);
+    }
+
     static inline void displayAllRoutes() {
         if (m_routes.empty()) {
             std::cout << "No routes available.\n";
@@ -25,9 +31,9 @@ public:
         }
 
         std::cout << "\nAll Routes:\n";
-        for (size_t i = 0; i < m_routes.size(); ++i) {
-            const auto& route = m_routes[i];
-            std::cout << "\nRoute #" << (i + 1) << ":\n"
+        for (const auto& route : m_routes) {
+            static size_t routeNumber = 1;
+            std::cout << "\nRoute #" << routeNumber++ << ":\n"
                      << "Departure Time: " 
                      << (route.getDepartureTimeHour() < 10 ? "0" : "") << route.getDepartureTimeHour() << ":"
                      << (route.getDepartureTimeMinute() < 10 ? "0" : "") << route.getDepartureTimeMinute() << "\n"

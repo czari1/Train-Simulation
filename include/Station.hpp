@@ -35,7 +35,6 @@ private:
     std::string m_name;
     Train* m_startStation;
     Train* m_endStation;
-    static std::vector<Station> m_stations;
 
 public:
 

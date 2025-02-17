@@ -72,6 +72,7 @@ private:
         int id;
         while (true) {
             if (std::cin >> id && id > 0) {
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
                 auto it = std::find_if(CJ::Management::m_trains.begin(), CJ::Management::m_trains.end(),
                                     [id](const Train& train) { return train.getId() == id; });
                 if (it == CJ::Management::m_trains.end()) {
@@ -82,7 +83,7 @@ private:
             } else {
                 std::cin.clear();
                 std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-                std::cout << "Invalid input. Please enter a positive number: ";
+                std::cout << "Invalid input. Please enter a positive number: "  << std::endl;
             }
         }
         return id;
@@ -119,6 +120,8 @@ private:
     static bool compareStationNames(const std::string& name1, const std::string& name2) {
         return formatStationName(name1) == formatStationName(name2);
     }
+
+    
 
 public:
     static void displayMainMenu() {
@@ -282,8 +285,9 @@ public:
         while (true) {
             std::cout << "\n=== Route Operations ===\n"
                      << "1. Display Route Information\n"
-                     << "2. Return to Main Menu\n"
-                     << "Enter your choice (1-2): ";
+                     << "2. Add New Route\n"
+                     << "3. Return to main menu\n"
+                     << "Enter your choice (1-3): ";
 
             int choice = getIntInput();
             switch (choice) {
@@ -291,7 +295,9 @@ public:
                     CJ::Management::displayAllRoutes();
                     break;
                 }
-                case 2:
+                //case 2:
+                    //CJ::Management::addNewRoute();
+                case 3: 
                     return;
                 default:
                     std::cout << "Invalid choice. Please try again.\n";

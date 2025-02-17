@@ -6,7 +6,7 @@
 
 namespace CJ {
 
-std::vector<Train> Train::m_trains;
+std::vector<Train> Management::m_trains;
 
 void initializeTrains() {
     CJ::Management::addTrain("Express_101", 160, 400, 1001, "Warsaw", "Krakow", 8, nullptr, nullptr, nullptr, nullptr);

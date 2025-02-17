@@ -5,7 +5,7 @@
 #include "../include/Management.hpp"
 namespace CJ {
 
-std::vector<Station> Station::m_stations;
+std::vector<Station> Management::m_stations;
 
 void initializeStations() {
     CJ::Management::addStation(nullptr, 5, {}, nullptr, nullptr, "Warsaw Central");
