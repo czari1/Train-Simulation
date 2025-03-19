@@ -12,10 +12,11 @@
 #pragma once
 #include <string>
 #include <vector>
-#include <iostream>
-#include <stdexcept>
+#include <memory>
 
 namespace CJ {
+
+// Forward declarations
 class Route;
 class Train;
 
@@ -26,18 +27,16 @@ class Train;
  * This class provides functionality to manage station details, including platform count,
  * train associations, intermediate stops, and start/end stations.
  */
-
 class Station {
 private:
-    Train* m_trainName;
+    std::shared_ptr<Train> m_trainName;
     int m_platformCount; 
-    std::vector<Route*> m_intermediateStops;
+    std::vector<std::shared_ptr<Route>> m_intermediateStops;
     std::string m_name;
-    Train* m_startStation;
-    Train* m_endStation;
+    std::shared_ptr<Train> m_startStation;
+    std::shared_ptr<Train> m_endStation;
 
 public:
-
     /**
      * @brief Construct a new Station object
      * 
@@ -48,70 +47,28 @@ public:
      * @param endStation End station of the route
      * @param name Name of the station
      */
+    Station(std::shared_ptr<Train> trainName = nullptr, 
+            int platformCount = 0,  
+            const std::vector<std::shared_ptr<Route>>& intermediateStops = {}, 
+            std::shared_ptr<Train> startStation = nullptr, 
+            std::shared_ptr<Train> endStation = nullptr,
+            const std::string& name = "");
 
-    Station(Train* trainName = nullptr, int platformCount = 0,  
-        const std::vector<Route*>& intermediateStops = {}, 
-        Train* startStation = 0 , 
-        Train* endStation = 0 ,
-        const std::string& name = "")
-        : m_trainName(trainName), m_platformCount(platformCount), 
-         m_intermediateStops(intermediateStops), 
-          m_startStation(startStation), m_endStation(endStation),
-          m_name(name) {}
+    // Setters
+    void setTrainName(std::shared_ptr<Train> trainName);
+    void setPlatformCount(int platformCount);
+    void setIntermediateStops(const std::vector<std::shared_ptr<Route>>& intermediateStops);
+    void setStartStation(std::shared_ptr<Train> startStation);
+    void setEndStation(std::shared_ptr<Train> endStation);
+    void setName(const std::string& name);
 
-    
-
-    void setTrainName(Train* trainName) {
-        m_trainName = trainName;
-    }
-
-    void setPlatformCount(int platformCount) {
-    if (platformCount <= 0) {
-        std::cerr << "Platform count must be greater than 0\n";
-        throw std::invalid_argument("Platform count must be greater than 0");
-    }
-    m_platformCount = platformCount;
-}
-
-    void setIntermediateStops(std::vector<Route*> intermiediateStops) {
-        m_intermediateStops = intermiediateStops;
-    }
-
-    void setStartStation(Train* startStation) {
-        m_startStation = startStation;
-    }
-
-    void setEndStation(Train* endStation) {
-        m_endStation = endStation;
-    }
-
-    void setName(const std::string& name) {
-        m_name = name;
-    }
-
-    Train* getTrainName() const {
-        return m_trainName;
-    }
-
-    int getPlatformCount() const {
-        return m_platformCount;
-    }
-
-    std::vector<Route*> getIntermediateStops() const {
-        return m_intermediateStops;
-    }
-
-    Train* getStartStation() const {
-        return m_startStation;
-    }
-
-    Train* getEndStation() const {
-        return m_endStation;
-    }
-
-    std::string getName() const {
-        return m_name;
-    }
-
+    // Getters
+    std::shared_ptr<Train> getTrainName() const;
+    int getPlatformCount() const;
+    const std::vector<std::shared_ptr<Route>>& getIntermediateStops() const;
+    std::shared_ptr<Train> getStartStation() const;
+    std::shared_ptr<Train> getEndStation() const;
+    const std::string& getName() const;
 };
-}
+
+} // namespace CJ
