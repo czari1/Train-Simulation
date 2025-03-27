@@ -1,8 +1,10 @@
 #include "../include/Management.hpp"
 #include <algorithm>
 #include <iostream>
+#include <sstream>
 
 namespace CJ {
+    Management* Management::instance = nullptr;
     std::vector<Train> Management::m_trains;
     std::vector<Station> Management::m_stations;
     std::vector<Route> Management::m_routes;
@@ -11,15 +13,23 @@ namespace CJ {
     void Management::addRoute(int depHour, int depMin, int arrHour, int arrMin,
                       Train& train, int duration,
                       const std::vector<std::string>& intermediateStops) {
+    // Calculate total minutes for departure and arrival
+    int depTime = depHour * 60 + depMin;
+    int arrTime = arrHour * 60 + depMin;
+    
+    // Calculate duration automatically
+    int calculatedDuration = arrTime - depTime;
+    
+    if (calculatedDuration <= 0) {
+        throw std::runtime_error("Arrival time must be after departure time");
+    }
+
     auto trainPtr = std::make_shared<Train>(train);
     Route newRoute(depHour, depMin, arrHour, arrMin,
-                duration, trainPtr, nullptr, nullptr, intermediateStops);
-    
-    // Save route to database first
+                calculatedDuration, trainPtr, nullptr, nullptr, intermediateStops);
+
     if (m_dbManager.saveRoute(newRoute)) {
-        // If database save successful, add to memory
         m_routes.push_back(newRoute);
-        // Assign train to route
         m_dbManager.assignTrainToRoute(train.getId(), intermediateStops);
     } else {
         throw std::runtime_error("Failed to save route to database");
@@ -57,42 +67,24 @@ namespace CJ {
         }
     }
 
-    void Management::addTrain(const std::string& trainName, int speed, int capacity, int id,
-                    const std::string& startStation, const std::string& endStation,
-                    int wagonCount, std::shared_ptr<Route> depHour, 
-                    std::shared_ptr<Route> depMin,
-                    std::shared_ptr<Route> arrHour, 
-                    std::shared_ptr<Route> arrMin) {
-    // First ensure stations exist or create them
+    bool Management::addTrain(const std::string& trainName, int speed, int capacity, 
+                        int id, int wagonCount) {
     try {
-        Station startStationObj;  // Create temporary station objects
-        Station endStationObj;
-        
-        if (!m_dbManager.getStationByName(startStation, startStationObj)) {
-            addStation(nullptr, 1, {}, nullptr, nullptr, startStation);
-        }
-        if (!m_dbManager.getStationByName(endStation, endStationObj)) {
-            addStation(nullptr, 1, {}, nullptr, nullptr, endStation);
-        }
-    } catch (const std::exception& e) {
-        throw std::runtime_error("Failed to create required stations: " + std::string(e.what()));
-    }
-
-    // Create and save train
-    Train newTrain(trainName, speed, capacity, id, startStation, endStation,
-                  wagonCount, depHour, depMin, arrHour, arrMin);
-    
+        Train newTrain(trainName, speed, capacity, id, wagonCount);
         if (m_dbManager.saveTrain(newTrain)) {
             m_trains.push_back(newTrain);
-        } else {
-            throw std::runtime_error("Failed to save train to database");
+            return true;
         }
+    } catch (const std::exception& e) {
+        std::cerr << "Error adding train: " << e.what() << std::endl;
     }
+    return false;
+}
 
     bool Management::deleteTrain(int id) {
-        // Delete from database first
+
         if (m_dbManager.deleteTrain(id)) {
-            // If database delete successful, remove from memory
+
             auto it = std::find_if(m_trains.begin(), m_trains.end(),
                                 [id](const Train& train) { return train.getId() == id; });
             if (it != m_trains.end()) {
@@ -106,7 +98,7 @@ namespace CJ {
     void Management::displayTrainInfo(int id) {
         Train train;
         if (!m_dbManager.getTrainById(id, train)) {
-            std::cout << "Train with ID " << id << " not found in database.\n";
+            std::cout << "Train with ID " << id << " not found.\n";
             return;
         }
     
@@ -115,11 +107,8 @@ namespace CJ {
                   << "ID: " << train.getId() << "\n"
                   << "Speed: " << train.getSpeed() << " km/h\n"
                   << "Capacity: " << train.getCapacity() << " passengers\n"
-                  << "Start Station: " << train.getStartStation() << "\n"
-                  << "End Station: " << train.getEndStation() << "\n"
                   << "Wagon Count: " << train.getWagonCount() << "\n";
     
-        // Display associated routes
         std::vector<std::vector<std::string>> routes;
         if (m_dbManager.getRoutesForTrain(id, routes)) {
             if (!routes.empty()) {
@@ -137,22 +126,18 @@ namespace CJ {
     }
 
     void Management::addStation(std::shared_ptr<Train> trainName, int platformCount,
-                        const std::vector<std::shared_ptr<Route>>& intermediateStops,
-                        std::shared_ptr<Train> startStation, std::shared_ptr<Train> endStation,
-                        const std::string& name) {
-    // Validate platform count
-    if (platformCount <= 0) {
-        platformCount = 1; // Set default platform count if invalid
-    }
-
-    // Create new station
+                         const std::vector<std::shared_ptr<Route>>& intermediateStops,
+                         std::shared_ptr<Train> startStation, std::shared_ptr<Train> endStation,
+                         const std::string& name) {
     try {
-        Station newStation(trainName, platformCount, intermediateStops,
-                         startStation, endStation, name);
+        // Format station name
+        std::string formattedName = formatStationName(name);
         
-        // Save to database first
+        // Create new station with validated platform count
+        Station newStation(trainName, std::max(1, platformCount), intermediateStops,
+                         startStation, endStation, formattedName);
+        
         if (m_dbManager.saveStation(newStation)) {
-            // If database save successful, add to memory
             m_stations.push_back(newStation);
         } else {
             throw std::runtime_error("Failed to save station to database");
@@ -163,9 +148,9 @@ namespace CJ {
 }
 
     bool Management::removeStation(const std::string& name) {
-        // Delete from database first
+
         if (m_dbManager.deleteStation(name)) {
-            // If database delete successful, remove from memory
+
             auto it = std::find_if(m_stations.begin(), m_stations.end(),
                                 [&name](const Station& station) {
                                     return station.getName() == name;
@@ -179,73 +164,99 @@ namespace CJ {
     }
 
     void Management::displayStationInfo(const std::string& name) {
-        Station station;
-        if (!m_dbManager.getStationByName(name, station)) {
-            std::cout << "Station with name " << name << " not found in database.\n";
+        if (name.empty()) {
+            std::cout << "Error: Station name cannot be empty\n";
             return;
         }
-    
-        std::cout << "Station Information:\n"
+
+        auto it = std::find_if(m_stations.begin(), m_stations.end(),
+                              [&name](const Station& s) {
+                                  return compareStationNames(s.getName(), name);
+                              });
+
+        if (it == m_stations.end()) {
+            std::cout << "Station '" << name << "' not found.\n";
+            return;
+        }
+
+        const Station& station = *it;
+        std::cout << "\nStation Information:\n"
                   << "Name: " << station.getName() << "\n"
                   << "Platform Count: " << station.getPlatformCount() << "\n";
-    
-        // Display routes passing through this station
-        std::vector<Route> routes;
-        if (m_dbManager.loadRoutes(routes)) {
-            std::cout << "Routes passing through this station:\n";
-            bool foundRoute = false;
-            for (const auto& route : routes) {
-                const auto& stops = route.getIntermediateStops();
-                if (std::find(stops.begin(), stops.end(), name) != stops.end()) {
-                    foundRoute = true;
-                    std::cout << "- Departure: "
-                             << (route.getDepartureTimeHour() < 10 ? "0" : "") 
-                             << route.getDepartureTimeHour() << ":"
-                             << (route.getDepartureTimeMinute() < 10 ? "0" : "") 
-                             << route.getDepartureTimeMinute() << "\n";
-                }
-            }
-            if (!foundRoute) {
-                std::cout << "No routes currently pass through this station.\n";
-            }
-        }
     }
 
     bool Management::initializeSystem() {
-        // Connect to database
         if (!m_dbManager.connect()) {
             std::cerr << "Failed to connect to database!" << std::endl;
             return false;
         }
 
-        // Load existing data from database
         m_dbManager.loadTrains(m_trains);
         m_dbManager.loadStations(m_stations);
 
-        // Initialize predefined routes if database is empty
         if (m_trains.empty() && m_stations.empty()) {
-            // Create predefined routes
-            Route route1(8, 30, 11, 45, 195, nullptr, nullptr, nullptr,
-                {"Warsaw Central", "Lodz Widzew", "Czestochowa", "Krakow Main"});
-            Route route2(9, 15, 13, 30, 255, nullptr, nullptr, nullptr,
-                {"Gdansk Central", "Bydgoszcz", "Poznan", "Wroclaw Main"});
-            Route route3(7, 0, 9, 30, 150, nullptr, nullptr, nullptr, 
-                {"Warsaw Central", "Radom", "Kielce", "Krakow Main"});
-            
-            m_routes.push_back(route1);
-            m_routes.push_back(route2);
-            m_routes.push_back(route3);
-
-            // Initialize predefined trains
-            addTrain("Express_101", 160, 400, 1001, "Warsaw", "Krakow", 8);
-            addTrain("InterCity_202", 140, 350, 1002, "Gdansk", "Wroclaw", 6);
-            addTrain("Regional_303", 120, 250, 1003, "Poznan", "Lodz", 4);
-
-            // Initialize predefined stations
+            // Add stations first
             addStation(nullptr, 5, {}, nullptr, nullptr, "Warsaw Central");
             addStation(nullptr, 4, {}, nullptr, nullptr, "Krakow Main");
             addStation(nullptr, 3, {}, nullptr, nullptr, "Gdansk Central");
+
+            // Add trains
+            Train express("Express_101", 160, 400, 1001, 8);
+            Train intercity("InterCity_202", 140, 350, 1002, 6);
+            Train regional("Regional_303", 120, 250, 1003, 4);
+            
+            addTrain("Express_101", 160, 400, 1001, 8);
+            addTrain("InterCity_202", 140, 350, 1002, 6);
+            addTrain("Regional_303", 120, 250, 1003, 4);
+
+            // Create and save routes with calculated durations
+            std::vector<std::string> route1Stops = {"Warsaw Central", "Lodz Widzew", "Czestochowa", "Krakow Main"};
+            std::vector<std::string> route2Stops = {"Gdansk Central", "Bydgoszcz", "Poznan", "Wroclaw Main"};
+            std::vector<std::string> route3Stops = {"Warsaw Central", "Radom", "Kielce", "Krakow Main"};
+
+            try {
+                // Duration will be calculated automatically
+                addRoute(8, 30, 11, 45, express, 0, route1Stops);
+                addRoute(9, 15, 13, 30, intercity, 0, route2Stops);
+                addRoute(7, 0, 9, 30, regional, 0, route3Stops);
+            } catch (const std::runtime_error& e) {
+                std::cerr << "Failed to initialize default routes: " << e.what() << std::endl;
+                return false;
+            }
         }
         return true;
+    }
+
+    std::string Management::formatStationName(const std::string& name) {
+        if (name.empty()) return name;
+        
+        std::string formattedName;
+        std::istringstream iss(name);
+        std::string word;
+        
+        while (iss >> word) {
+            if (!formattedName.empty()) {
+                formattedName += " ";
+            }
+            
+            // Convert word to lowercase
+            std::transform(word.begin(), word.end(), word.begin(),
+                          [](unsigned char c) { return std::tolower(c); });
+            
+            // Capitalize first letter
+            if (!word.empty()) {
+                word[0] = std::toupper(word[0]);
+            }
+            
+            formattedName += word;
+        }
+        
+        return formattedName;
+    }
+
+    bool Management::compareStationNames(const std::string& name1, const std::string& name2) {
+        std::string formattedName1 = formatStationName(name1);
+        std::string formattedName2 = formatStationName(name2);
+        return formattedName1 == formattedName2;
     }
 }

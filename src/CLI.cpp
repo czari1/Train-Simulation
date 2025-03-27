@@ -86,6 +86,22 @@ bool CLI::isStationNameTaken(const std::string& name) {
         });
 }
 
+template <typename T>
+bool CLI::displayUsedObjects(const std::string& prompt, 
+                           const std::vector<T>& collection,
+                           std::function<std::string(const T&)> getIdFunc) {
+    if (collection.empty()) {
+        std::cout << "No items available to display.\n";
+        return false;
+    }
+
+    std::cout << prompt << std::endl;
+    for (const auto& item : collection) {
+        std::cout << formatStationName(getIdFunc(item)) << "\n";
+    }
+    return true;
+}
+
 bool CLI::compareStationNames(const std::string& name1, const std::string& name2) {
     return formatStationName(name1) == formatStationName(name2);
 }
@@ -99,7 +115,7 @@ void CLI::displayMainMenu() {
               << "Enter your choice (1-4): ";
 }
 
-void CLI::handleTrainOperations() {
+void CLI::handleTrainOperations(DatabaseManager& db) {
     while (true) {
         std::cout << "\n=== Train Operations ===\n"
                   << "1. Add New Train\n"
@@ -127,22 +143,20 @@ void CLI::handleTrainOperations() {
                 std::cout << "Enter train ID: ";
                 int id;
                 getNewValidId(id);
-                std::cout << "Enter start station: ";
-                std::string startStation = getStringInput();
-                std::cout << "Enter end station: ";
-                std::string endStation = getStringInput();
                 std::cout << "Enter wagon count: ";
                 int wagonCount;
                 getValidPositiveInt(wagonCount);
 
-                CJ::Management::addTrain(name, speed, capacity, id, startStation, endStation,
-                                      wagonCount, nullptr, nullptr, nullptr, nullptr);
+                CJ::Management::addTrain(name, speed, capacity, id, wagonCount);
+                                        
                 std::cout << "Train added successfully!\n";
                 break;
             }
             case 2: {
-                displayUsedObjects<Train>("Train IDs possible to delete:", CJ::Management::m_trains,
-                    [](const Train& train) { return std::to_string(train.getId()); });
+                if (!displayUsedObjects<Train>("Train IDs possible to delete:", CJ::Management::m_trains,
+                    [](const Train& train) { return std::to_string(train.getId()); })) {
+                    break;
+                }
 
                 std::cout << "Enter train ID to delete: ";
                 int id;
@@ -155,8 +169,10 @@ void CLI::handleTrainOperations() {
                 break;
             }
             case 3: {
-                displayUsedObjects<Train>("Train IDs possible to display:", CJ::Management::m_trains,
-                    [](const Train& train) { return std::to_string(train.getId()); });
+                if (!displayUsedObjects<Train>("Train IDs possible to display:", CJ::Management::m_trains,
+                    [](const Train& train) { return std::to_string(train.getId()); })) {
+                    break;
+                }
 
                 std::cout << "Enter train ID to display: ";
                 int id;
@@ -172,7 +188,7 @@ void CLI::handleTrainOperations() {
     }
 }
 
-void CLI::handleStationOperations() {
+void CLI::handleStationOperations(DatabaseManager& db) {
     while (true) {
         std::cout << "\n=== Station Operations ===\n"
                   << "1. Add New Station\n"
@@ -206,8 +222,11 @@ void CLI::handleStationOperations() {
                 break;
             }
             case 2: {
-                displayUsedObjects<Station>("Used Station Names:", CJ::Management::m_stations,
-                    [](const Station& station) { return station.getName(); });
+                if (!displayUsedObjects<Station>("Used Station Names:", CJ::Management::m_stations,
+                    [](const Station& station) { return station.getName(); })) {
+                    std::cout << "No stations available to remove.\n";
+                    break;
+                }
 
                 std::cout << "Enter station name to remove: ";
                 std::string name = getStringInput();
@@ -220,12 +239,28 @@ void CLI::handleStationOperations() {
                 break;
             }
             case 3: {
-                displayUsedObjects<Station>("Used Station Names:", CJ::Management::m_stations,
-                    [](const Station& station) { return station.getName(); });
+                if (!displayUsedObjects<Station>("Used Station Names:", CJ::Management::m_stations,
+                    [](const Station& station) { return station.getName(); })) {
+                    std::cout << "No stations available to display.\n";
+                    break;
+                }
 
                 std::cout << "Enter station name to display: ";
                 std::string name = getStringInput();
-                CJ::Management::displayStationInfo(name);
+                name = formatStationName(name); // Format the input name
+                
+                // Find the station in the Management's stations
+                auto it = std::find_if(CJ::Management::m_stations.begin(), 
+                                      CJ::Management::m_stations.end(),
+                                      [&name](const Station& s) {
+                                          return compareStationNames(s.getName(), name);
+                                      });
+                
+                if (it == CJ::Management::m_stations.end()) {
+                    std::cout << "Station '" << name << "' not found.\n";
+                } else {
+                    CJ::Management::displayStationInfo(it->getName());
+                }
                 break;
             }
             case 4:
@@ -236,32 +271,141 @@ void CLI::handleStationOperations() {
     }
 }
 
-void CLI::handleRouteOperations() {
+void CLI::handleRouteOperations(DatabaseManager& db) {
     while (true) {
-        std::cout << "\n=== Route Operations ===\n"
-                  << "1. Display Route Information\n"
-                  << "2. Add New Route\n"
-                  << "3. Return to main menu\n"
-                  << "Enter your choice (1-3): ";
+        std::cout << "\nRoute Operations:\n";
+        std::cout << "1. Add Route\n";
+        std::cout << "2. List Routes\n";
+        std::cout << "3. Back to Main Menu\n";
+        std::cout << "Choose an option: ";
 
         int choice;
         getIntInput(choice);
 
         switch (choice) {
-            case 1:
-                CJ::Management::displayAllRoutes();
+            case 1: {
+                if (CJ::Management::m_stations.empty()) {
+                    std::cout << "No stations available. Please add stations first.\n";
+                    break;
+                }
+
+                std::vector<std::string> stops;
+                std::cout << "Enter number of stops: ";
+                int numStops;
+                getValidIntInput(2, 10, numStops);
+
+                // Display available stations
+                std::cout << "\nAvailable stations:\n";
+                for (const auto& station : CJ::Management::m_stations) {
+                    std::cout << "- " << station.getName() << "\n";
+                }
+                std::cout << "\n";
+
+                // Collect station names
+                for (int i = 0; i < numStops; i++) {
+                    while (true) {
+                        std::cout << "Enter station name for stop " << (i + 1) << ": ";
+                        std::string stationName = getStringInput();
+                        if (!stationName.empty()) {
+                            stationName = CJ::Management::formatStationName(stationName);
+                            
+                            // Check if station exists
+                            auto it = std::find_if(CJ::Management::m_stations.begin(), 
+                                                 CJ::Management::m_stations.end(),
+                                                 [&stationName](const Station& s) {
+                                                     return CJ::Management::compareStationNames(s.getName(), stationName);
+                                                 });
+                            
+                            if (it != CJ::Management::m_stations.end()) {
+                                stops.push_back(it->getName()); // Use the exact name from the database
+                                break;
+                            }
+                            std::cout << "Station '" << stationName << "' not found. Please try again.\n";
+                        } else {
+                            std::cout << "Station name cannot be empty. Please try again.\n";
+                        }
+                    }
+                }
+
+                std::cout << "Enter departure hour (0-23): ";
+                int depHour;
+                getValidIntInput(0, 23, depHour);
+
+                std::cout << "Enter departure minute (0-59): ";
+                int depMin;
+                getValidIntInput(0, 59, depMin);
+
+                std::cout << "Enter arrival hour (0-23): ";
+                int arrHour;
+                getValidIntInput(0, 23, arrHour);
+
+                std::cout << "Enter arrival minute (0-59): ";
+                int arrMin;
+                getValidIntInput(0, 59, arrMin);
+
+                int depTime = depHour * 60 + depMin;
+                int arrTime = arrHour * 60 + arrMin;
+                if (arrTime <= depTime) {
+                    std::cout << "Arrival time must be after departure time!\n";
+                    break;
+                }
+
+                // Calculate duration automatically
+                int duration = arrTime - depTime;
+                std::cout << "Calculated route duration: " << duration << " minutes\n";
+
+                // Create and save the route
+                Route newRoute(depHour, depMin, arrHour, arrMin, duration, 
+                             nullptr, nullptr, nullptr, stops);
+                
+                try {
+                    if (db.saveRoute(newRoute)) {
+                        std::cout << "Route added successfully!\n";
+                    } else {
+                        std::cout << "Failed to save route. Please check the input values.\n";
+                    }
+                } catch (const std::runtime_error& e) {
+                    std::cout << "Error: " << e.what() << "\n";
+                }
                 break;
-            case 2:
-                return;
+            }
+            case 2: {
+                std::vector<Route> routes;
+                if (db.loadRoutes(routes)) {
+                    if (routes.empty()) {
+                        std::cout << "No routes found.\n";
+                    } else {
+                        std::cout << "\nCurrent Routes:\n";
+                        for (const auto& route : routes) {
+                            std::cout << "Route: ";
+                            const auto& routeStops = route.getIntermediateStops();
+                            for (size_t i = 0; i < routeStops.size(); ++i) {
+                                std::cout << routeStops[i];
+                                if (i < routeStops.size() - 1) std::cout << " -> ";
+                            }
+                            std::cout << "\nDeparture: " << route.getDepartureTimeHour() 
+                                    << ":" << route.getDepartureTimeMinute()
+                                    << " Arrival: " << route.getArrivalTimeHour() 
+                                    << ":" << route.getArrivalTimeMinute() 
+                                    << " Duration: " << route.getDuration() << " minutes\n\n";
+                        }
+                    }
+                } else {
+                    std::cout << "Failed to load routes.\n";
+                }
+                break;
+            }
             case 3:
                 return;
             default:
-                std::cout << "Invalid choice. Please try again.\n";
+                std::cout << "Invalid option. Please try again.\n";
         }
     }
 }
 
 void CLI::run() {
+    DatabaseManager& db = Management::getInstance().getDatabase();
+    
     while (true) {
         displayMainMenu();
         int choice;
@@ -269,13 +413,13 @@ void CLI::run() {
 
         switch (choice) {
             case 1:
-                handleTrainOperations();
+                handleTrainOperations(db);
                 break;
             case 2:
-                handleStationOperations();
+                handleStationOperations(db);
                 break;
             case 3:
-                handleRouteOperations();
+                handleRouteOperations(db);
                 break;
             case 4:
                 std::cout << "Thank you for using the Train Management System!\n";
@@ -286,4 +430,4 @@ void CLI::run() {
     }
 }
 
-} // namespace CJ
+}

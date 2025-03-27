@@ -1,5 +1,6 @@
 #include <iostream>
 #include <stdexcept>
+#include <filesystem>
 #include "../include/Train.hpp"
 #include "../include/Route.hpp"
 #include "../include/Station.hpp"
@@ -9,30 +10,29 @@
 
 int main() {
     try {
-        // Initialize the system using Management class
-        CJ::Management management;
-        management.initializeSystem();
+        std::cout << "Starting Train Simulation System..." << std::endl;
         
-        // Test database operations with debug output
-        std::cout << "Attempting to create database connection..." << std::endl;
+        if (!CJ::Management::initializeSystem()) {
+            std::cerr << "Failed to initialize system!" << std::endl;
+            return 1;
+        }
+
+        std::filesystem::path dbPath = std::filesystem::current_path() / "database" / "train_system.db";
+        if (!std::filesystem::exists(dbPath)) {
+            std::cerr << "Database file was not created at: " << dbPath << std::endl;
+            return 1;
+        }
+
         CJ::DatabaseManager dbManager;
-        
+
+        std::cout << "Database file created successfully at: " << dbPath << std::endl;
+
         if (dbManager.connect()) {
             std::cout << "Database connection successful" << std::endl;
             dbManager.displayDatabaseContents();
-            
-            // Test saving a train
-            CJ::Train testTrain("TestTrain", 100, 200, 999, "StartStation", "EndStation", 5);
-            if (dbManager.saveTrain(testTrain)) {
-                std::cout << "Train saved successfully!" << std::endl;
-            } else {
-                std::cerr << "Failed to save train!" << std::endl;
-            }
         } else {
             std::cerr << "Failed to connect to database!" << std::endl;
         }
-        
-        // Run the command-line interface
         CJ::CLI Cli;
         Cli.run();
     }

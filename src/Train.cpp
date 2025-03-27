@@ -7,32 +7,29 @@
 namespace CJ {
 
     Train::Train(const std::string& trainName, int speed, int capacity, int id,
-        const std::string& startStation, const std::string& endStation,
         int wagonCount, std::shared_ptr<Route> departureTimeHour,
         std::shared_ptr<Route> departureTimeMinute,
         std::shared_ptr<Route> arrivalTimeHour,
         std::shared_ptr<Route> arrivalTimeMinute)
-: m_trainName(trainName)
-, m_speed(speed)  // Set directly
-, m_capacity(capacity)  // Set directly
-, m_id(id)
-, m_startStation(startStation)
-, m_endStation(endStation)
-, m_wagonCount(wagonCount)  // Set directly
-, m_departureTimeHour(departureTimeHour)
-, m_departureTimeMinute(departureTimeMinute)
-, m_arrivalTimeHour(arrivalTimeHour)
-, m_arrivalTimeMinute(arrivalTimeMinute)
+        : m_trainName(trainName)
+        , m_speed(speed)  
+        , m_capacity(capacity)  
+        , m_id(id)
+        , m_wagonCount(wagonCount)  
+        , m_departureTimeHour(departureTimeHour)
+        , m_departureTimeMinute(departureTimeMinute)
+        , m_arrivalTimeHour(arrivalTimeHour)
+        , m_arrivalTimeMinute(arrivalTimeMinute)
 {
-    // Validate after initialization
+
     if (m_speed <= 0) {
-        m_speed = 1;  // Set default value instead of throwing
+        m_speed = 1;  
     }
     if (m_capacity <= 0) {
-        m_capacity = 1;  // Set default value instead of throwing
+        m_capacity = 1;  
     }
     if (m_wagonCount <= 0) {
-        m_wagonCount = 1;  // Set default value instead of throwing
+        m_wagonCount = 1;  
     }
 }
 
@@ -68,14 +65,6 @@ void Train::setWagonCount(int wagonCount) {
     m_wagonCount = wagonCount;
 }
 
-void Train::setStartStation(const std::string& startStation) {
-    m_startStation = startStation;
-}
-
-void Train::setEndStation(const std::string& endStation) {
-    m_endStation = endStation;
-}
-
 void Train::setDepartureTimeHour(std::shared_ptr<Route> departureTimeHour) {
     m_departureTimeHour = departureTimeHour;
 }
@@ -108,14 +97,6 @@ int Train::getId() const {
     return m_id;
 }
 
-const std::string& Train::getStartStation() const {
-    return m_startStation;
-}
-
-const std::string& Train::getEndStation() const {
-    return m_endStation;
-}
-
 int Train::getWagonCount() const {
     return m_wagonCount;
 }
@@ -136,4 +117,4 @@ std::shared_ptr<Route> Train::getArrivalTimeMinute() const {
     return m_arrivalTimeMinute;
 }
 
-} // namespace CJ
+} 

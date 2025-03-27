@@ -1,4 +1,5 @@
 #include "../include/DatabaseManager.hpp"
+#include "../include/Management.hpp"
 #include <iostream>
 #include <sstream>
 #include <filesystem>
@@ -17,16 +18,23 @@ bool DatabaseManager::connect(const std::string& dbPath) {
         return true;
     }
 
-    // Create database directory if it doesn't exist
-    std::filesystem::path dbDir = std::filesystem::absolute("./database");
+    std::filesystem::path dbDir = std::filesystem::current_path() / "database";
+    
+    std::error_code ec;
     if (!std::filesystem::exists(dbDir)) {
-        std::filesystem::create_directory(dbDir);
+        if (!std::filesystem::create_directory(dbDir, ec)) {
+            std::cerr << "Error creating directory: " << ec.message() << std::endl;
+            return false;
+        }
     }
 
-    // Use database directory for the db file
     std::string fullPath = (dbDir / "train_system.db").string();
+    std::cout << "Attempting to create/open database at: " << fullPath << std::endl;
 
-    int rc = sqlite3_open(fullPath.c_str(), &m_db);
+    int rc = sqlite3_open_v2(fullPath.c_str(), &m_db, 
+                           SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, 
+                           nullptr);
+    
     if (rc != SQLITE_OK) {
         std::cerr << "Error opening database: " << sqlite3_errmsg(m_db) << std::endl;
         sqlite3_close(m_db);
@@ -36,7 +44,14 @@ bool DatabaseManager::connect(const std::string& dbPath) {
 
     m_isConnected = true;
     std::cout << "Database connected successfully to: " << fullPath << std::endl;
-    return prepareDatabase();
+    
+    if (!prepareDatabase()) {
+        std::cerr << "Failed to initialize database tables" << std::endl;
+        disconnect();
+        return false;
+    }
+    
+    return true;
 }
 
 bool DatabaseManager::disconnect() {
@@ -88,16 +103,18 @@ bool DatabaseManager::executeQuery(const std::string& query) {
 }
 
 bool DatabaseManager::prepareDatabase() {
-    // Create tables if they don't exist
+    if (!m_isConnected) {
+        std::cerr << "Database not connected" << std::endl;
+        return false;
+    }
+
     std::string createTrainsTable = 
         "CREATE TABLE IF NOT EXISTS trains ("
         "id INTEGER PRIMARY KEY,"
         "name TEXT NOT NULL,"
         "speed INTEGER NOT NULL,"
         "capacity INTEGER NOT NULL,"
-        "wagon_count INTEGER NOT NULL,"
-        "start_station TEXT NOT NULL,"
-        "end_station TEXT NOT NULL"
+        "wagon_count INTEGER NOT NULL"
         ");";
     
     std::string createStationsTable = 
@@ -135,28 +152,15 @@ bool DatabaseManager::prepareDatabase() {
         "FOREIGN KEY (route_id) REFERENCES routes(identifier)"
         ");";
 
-    std::string createTrainStationTrigger = 
-        "CREATE TRIGGER IF NOT EXISTS check_train_stations "
-        "BEFORE INSERT ON trains "
-        "BEGIN "
-        "  SELECT CASE "
-        "    WHEN NEW.start_station NOT IN (SELECT name FROM stations) "
-        "    THEN RAISE(ABORT, 'Start station does not exist') "
-        "    WHEN NEW.end_station NOT IN (SELECT name FROM stations) "
-        "    THEN RAISE(ABORT, 'End station does not exist') "
-        "  END; "
-        "END;";
 
     bool success = executeQuery(createStationsTable) &&
                   executeQuery(createTrainsTable) &&
                   executeQuery(createRoutesTable) &&
                   executeQuery(createRouteStopsTable) &&
-                  executeQuery(createTrainRoutesTable) &&
-                  executeQuery(createTrainStationTrigger);
-
+                  executeQuery(createTrainRoutesTable);
 
     if (success) {
-        std::cout << "Database tables created successfully!" << std::endl; // Debug message
+        std::cout << "Database tables created successfully!" << std::endl; 
     } else {
         std::cerr << "Failed to create database tables!" << std::endl;
     }
@@ -181,10 +185,23 @@ bool DatabaseManager::displayDatabaseContents() {
         char* errMsg = nullptr;
         int rc = sqlite3_exec(m_db, query, 
             [](void*, int argc, char** argv, char** colNames) {
+                std::stringstream line;
                 for (int i = 0; i < argc; i++) {
-                    std::cout << colNames[i] << ": " << (argv[i] ? argv[i] : "NULL") << "\t";
+                    line << colNames[i] << ": " << (argv[i] ? argv[i] : "NULL");
+                    
+                    if (i < argc - 1) {
+                        if (std::string(colNames[i]) == "id" || 
+                            std::string(colNames[i]) == "name") {
+                            line << std::string(8, ' ');
+                        } else if (std::string(colNames[i]) == "speed") {
+                            line << std::string(6, ' ');
+                        } else if (std::string(colNames[i]) == "capacity" ||
+                                 std::string(colNames[i]) == "wagon_count") {
+                            line << std::string(3, ' ');
+                        }
+                    }
                 }
-                std::cout << std::endl;
+                std::cout << line.str() << std::endl;
                 return 0;
             }, 
             nullptr, &errMsg);
@@ -210,75 +227,45 @@ std::string DatabaseManager::generateRouteIdentifier(const std::vector<std::stri
 }
 
 bool DatabaseManager::saveTrain(const Train& train) {
-    if (!m_isConnected) return false;
-    
-    // First ensure stations exist
-    std::stringstream checkQuery;
-    checkQuery << "SELECT COUNT(*) FROM stations WHERE name IN ('"
-               << train.getStartStation() << "', '"
-               << train.getEndStation() << "');";
+    std::string sql = "INSERT OR REPLACE INTO trains "
+                     "(id, name, speed, capacity, wagon_count) VALUES ("
+                     + std::to_string(train.getId()) + ", '"
+                     + train.getTrainName() + "', "
+                     + std::to_string(train.getSpeed()) + ", "
+                     + std::to_string(train.getCapacity()) + ", "
+                     + std::to_string(train.getWagonCount()) + ");";
 
-    sqlite3_stmt* stmt;
-    int rc = sqlite3_prepare_v2(m_db, checkQuery.str().c_str(), -1, &stmt, nullptr);
-    if (rc == SQLITE_OK && sqlite3_step(stmt) == SQLITE_ROW) {
-        int count = sqlite3_column_int(stmt, 0);
-        if (count < 2) {
-            sqlite3_finalize(stmt);
-            std::cerr << "Start or end station does not exist\n";
-            return false;
-        }
+    char* errMsg = nullptr;
+    int rc = sqlite3_exec(m_db, sql.c_str(), nullptr, nullptr, &errMsg);
+    
+    if (rc != SQLITE_OK) {
+        std::cerr << "SQL error: " << errMsg << std::endl;
+        sqlite3_free(errMsg);
+        return false;
     }
-    sqlite3_finalize(stmt);
-    
-    // If stations exist, save train
-    std::stringstream query;
-    query << "INSERT OR REPLACE INTO trains "
-          << "(id, name, speed, capacity, wagon_count, start_station, end_station) VALUES ("
-          << train.getId() << ", "
-          << "'" << train.getTrainName() << "', "
-          << train.getSpeed() << ", "
-          << train.getCapacity() << ", "
-          << train.getWagonCount() << ", "
-          << "'" << train.getStartStation() << "', "
-          << "'" << train.getEndStation() << "');";
-    
-    return executeQuery(query.str());
+    return true;
 }
 
 bool DatabaseManager::loadTrains(std::vector<Train>& trains) {
-    if (!m_isConnected) {
-        return false;
-    }
+    const char* sql = "SELECT id, name, speed, capacity, wagon_count FROM trains;";
     
-    // Clear existing trains
-    trains.clear();
-    
-    // Prepare query
-    const char* query = "SELECT id, name, speed, capacity, start_station, end_station, wagon_count FROM trains;";
-    
-    // Execute query
     sqlite3_stmt* stmt;
-    int rc = sqlite3_prepare_v2(m_db, query, -1, &stmt, nullptr);
-    if (rc != SQLITE_OK) {
-        std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(m_db) << std::endl;
+    if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
         return false;
     }
-    
-    // Process results
-    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
         int id = sqlite3_column_int(stmt, 0);
         std::string name = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
         int speed = sqlite3_column_int(stmt, 2);
         int capacity = sqlite3_column_int(stmt, 3);
-        std::string startStation = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4));
-        std::string endStation = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5));
-        int wagonCount = sqlite3_column_int(stmt, 6);
-        
-        trains.emplace_back(name, speed, capacity, id, startStation, endStation, wagonCount);
+        int wagonCount = sqlite3_column_int(stmt, 4);
+
+        trains.emplace_back(name, speed, capacity, id, wagonCount);
     }
-    
+
     sqlite3_finalize(stmt);
-    return rc != SQLITE_ERROR;
+    return true;
 }
 
 bool DatabaseManager::deleteTrain(int id) {
@@ -293,7 +280,7 @@ bool DatabaseManager::deleteTrain(int id) {
 }
 
 bool DatabaseManager::updateTrain(const Train& train) {
-    return saveTrain(train); // saveTrain already handles updates
+    return saveTrain(train); 
 }
 
 bool DatabaseManager::getTrainById(int id, Train& train) {
@@ -302,7 +289,7 @@ bool DatabaseManager::getTrainById(int id, Train& train) {
     }
     
     std::stringstream query;
-    query << "SELECT id, name, speed, capacity, start_station, end_station, wagon_count "
+    query << "SELECT id, name, speed, capacity, wagon_count "
           << "FROM trains WHERE id = " << id << ";";
     
     sqlite3_stmt* stmt;
@@ -315,14 +302,12 @@ bool DatabaseManager::getTrainById(int id, Train& train) {
     bool found = false;
     if ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
         std::string name = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
-        int speed = std::max(1, sqlite3_column_int(stmt, 2));  // Ensure positive value
-        int capacity = std::max(1, sqlite3_column_int(stmt, 3));  // Ensure positive value
-        std::string startStation = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4));
-        std::string endStation = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5));
-        int wagonCount = std::max(1, sqlite3_column_int(stmt, 6));  // Ensure positive value
+        int speed = std::max(1, sqlite3_column_int(stmt, 2));
+        int capacity = std::max(1, sqlite3_column_int(stmt, 3));
+        int wagonCount = std::max(1, sqlite3_column_int(stmt, 4));
         
         try {
-            train = Train(name, speed, capacity, id, startStation, endStation, wagonCount);
+            train = Train(name, speed, capacity, id, wagonCount);
             found = true;
         } catch (const std::exception& e) {
             std::cerr << "Error creating train object: " << e.what() << std::endl;
@@ -334,27 +319,36 @@ bool DatabaseManager::getTrainById(int id, Train& train) {
     return found;
 }
 
+std::string DatabaseManager::escapeString(const std::string& str) const {
+    std::string escaped = str;
+    size_t pos = 0;
+
+    while ((pos = escaped.find('\'', pos)) != std::string::npos) {
+        escaped.insert(pos, 1, '\'');
+        pos += 2;
+    }
+    
+    return escaped;
+}
+
 bool DatabaseManager::saveStation(const Station& station) {
     if (!m_isConnected) return false;
 
-    // First check if station exists (case insensitive)
     std::stringstream checkQuery;
     checkQuery << "SELECT name FROM stations WHERE name COLLATE NOCASE = '" 
-               << station.getName() << "';";
+               << escapeString(station.getName()) << "';";
 
     sqlite3_stmt* stmt;
     int rc = sqlite3_prepare_v2(m_db, checkQuery.str().c_str(), -1, &stmt, nullptr);
     if (rc == SQLITE_OK && sqlite3_step(stmt) == SQLITE_ROW) {
         sqlite3_finalize(stmt);
-        std::cerr << "Station '" << station.getName() << "' already exists\n";
-        return false;
+        throw std::runtime_error("Station '" + station.getName() + "' already exists");
     }
     sqlite3_finalize(stmt);
 
-    // If not exists, insert new station
     std::stringstream query;
     query << "INSERT INTO stations (name, platform_count) VALUES ("
-          << "'" << station.getName() << "', "
+          << "'" << escapeString(station.getName()) << "', "
           << station.getPlatformCount() << ");";
     
     return executeQuery(query.str());
@@ -364,22 +358,18 @@ bool DatabaseManager::loadStations(std::vector<Station>& stations) {
     if (!m_isConnected) {
         return false;
     }
-    
-    // Clear existing stations
+
     stations.clear();
-    
-    // Prepare query
+
     const char* query = "SELECT name, platform_count FROM stations;";
-    
-    // Execute query
+
     sqlite3_stmt* stmt;
     int rc = sqlite3_prepare_v2(m_db, query, -1, &stmt, nullptr);
     if (rc != SQLITE_OK) {
         std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(m_db) << std::endl;
         return false;
     }
-    
-    // Process results
+
     while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
         std::string name = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
         int platformCount = sqlite3_column_int(stmt, 1);
@@ -392,7 +382,7 @@ bool DatabaseManager::loadStations(std::vector<Station>& stations) {
 }
 
 bool DatabaseManager::updateStation(const Station& station) {
-    return saveStation(station); // saveStation already handles updates
+    return saveStation(station); 
 }
 
 bool DatabaseManager::deleteStation(const std::string& name) {
@@ -407,122 +397,138 @@ bool DatabaseManager::deleteStation(const std::string& name) {
 }
 
 bool DatabaseManager::getStationByName(const std::string& name, Station& station) {
-    if (!m_isConnected) {
-        return false;
-    }
-    
+    if (!m_isConnected) return false;
+
     std::stringstream query;
-    query << "SELECT name, platform_count FROM stations WHERE name = '" << name << "';";
-    
+    query << "SELECT * FROM stations WHERE name COLLATE NOCASE = '" 
+          << escapeString(name) << "';";
+
     sqlite3_stmt* stmt;
     int rc = sqlite3_prepare_v2(m_db, query.str().c_str(), -1, &stmt, nullptr);
-    if (rc != SQLITE_OK) {
-        std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(m_db) << std::endl;
-        return false;
-    }
     
-    bool found = false;
-    if ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
-        int platformCount = sqlite3_column_int(stmt, 1);
-        
-        station = Station(nullptr, platformCount, std::vector<std::shared_ptr<Route>>{}, nullptr, nullptr, name);
-        found = true;
+    if (rc == SQLITE_OK) {
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            station = Station(
+                nullptr,
+                sqlite3_column_int(stmt, 1),  
+                {},
+                nullptr,
+                nullptr,
+                reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0))  
+            );
+            sqlite3_finalize(stmt);
+            return true;
+        }
     }
     
     sqlite3_finalize(stmt);
-    return found;
+    return false;
 }
 
 bool DatabaseManager::loadRoutes(std::vector<Route>& routes) {
     if (!m_isConnected) {
         return false;
     }
-    
-    routes.clear();
-    
-    // First get all routes
-    const char* query = 
-        "SELECT identifier, dep_hour, dep_minute, arr_hour, arr_minute, duration "
-        "FROM routes;";
+
+    const char* query = "SELECT identifier, dep_hour, dep_minute, arr_hour, "
+                       "arr_minute, duration FROM routes;";
     
     sqlite3_stmt* stmt;
     int rc = sqlite3_prepare_v2(m_db, query, -1, &stmt, nullptr);
     if (rc != SQLITE_OK) {
-        std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(m_db) << std::endl;
         return false;
     }
-    
-    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+
+    routes.clear();
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
         std::string identifier = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
         int depHour = sqlite3_column_int(stmt, 1);
         int depMin = sqlite3_column_int(stmt, 2);
         int arrHour = sqlite3_column_int(stmt, 3);
         int arrMin = sqlite3_column_int(stmt, 4);
         int duration = sqlite3_column_int(stmt, 5);
-        
+
         // Get stops for this route
         std::vector<std::string> stops;
         std::stringstream stopsQuery;
-        stopsQuery << "SELECT stop_name FROM route_stops WHERE route_id = '" 
-                  << identifier << "' ORDER BY stop_order;";
-        
+        stopsQuery << "SELECT station_name FROM route_stops WHERE route_id = '" 
+                  << escapeString(identifier) << "' ORDER BY stop_order;";
+
         sqlite3_stmt* stopsStmt;
-        int stopsRc = sqlite3_prepare_v2(m_db, stopsQuery.str().c_str(), -1, &stopsStmt, nullptr);
-        if (stopsRc == SQLITE_OK) {
-            while ((stopsRc = sqlite3_step(stopsStmt)) == SQLITE_ROW) {
-                std::string stopName = reinterpret_cast<const char*>(sqlite3_column_text(stopsStmt, 0));
-                stops.push_back(stopName);
+        rc = sqlite3_prepare_v2(m_db, stopsQuery.str().c_str(), -1, &stopsStmt, nullptr);
+        if (rc == SQLITE_OK) {
+            while (sqlite3_step(stopsStmt) == SQLITE_ROW) {
+                const char* stationName = reinterpret_cast<const char*>(
+                    sqlite3_column_text(stopsStmt, 0));
+                stops.push_back(stationName);
             }
             sqlite3_finalize(stopsStmt);
+
+            routes.emplace_back(depHour, depMin, arrHour, arrMin, duration, 
+                              nullptr, nullptr, nullptr, stops);
         }
-        
-        // Create route object
-        routes.emplace_back(depHour, depMin, arrHour, arrMin, duration,
-                          nullptr, nullptr, nullptr, stops);
     }
-    
+
     sqlite3_finalize(stmt);
-    return rc != SQLITE_ERROR;
+    return true;
 }
 
 bool DatabaseManager::saveRoute(const Route& route) {
-    if (!m_isConnected) {
-        return false;
-    }
-    
+    if (!m_isConnected) return false;
+
+    // Generate identifier from stops
     std::string identifier = generateRouteIdentifier(route.getIntermediateStops());
-    
-    // Save route details
-    std::stringstream query;
-    query << "INSERT OR REPLACE INTO routes "
-          << "(identifier, dep_hour, dep_minute, arr_hour, arr_minute, duration) VALUES ("
-          << "'" << identifier << "', "
-          << route.getDepartureTimeHour() << ", "
-          << route.getDepartureTimeMinute() << ", "
-          << route.getArrivalTimeHour() << ", "
-          << route.getArrivalTimeMinute() << ", "
-          << route.getDuration() << ");";
-    
-    if (!executeQuery(query.str())) {
+
+    // Check if route already exists
+    std::stringstream checkQuery;
+    checkQuery << "SELECT identifier FROM routes WHERE identifier COLLATE NOCASE = '" 
+               << escapeString(identifier) << "';";
+
+    sqlite3_stmt* stmt;
+    int rc = sqlite3_prepare_v2(m_db, checkQuery.str().c_str(), -1, &stmt, nullptr);
+    if (rc == SQLITE_OK && sqlite3_step(stmt) == SQLITE_ROW) {
+        sqlite3_finalize(stmt);
+        throw std::runtime_error("Route from '" + route.getIntermediateStops().front() + 
+                               "' to '" + route.getIntermediateStops().back() + "' already exists");
+    }
+    sqlite3_finalize(stmt);
+
+    // Start transaction
+    if (!executeQuery("BEGIN TRANSACTION;")) {
         return false;
     }
-    
-    // Save route stops
+
+    // Insert the route
+    std::stringstream routeQuery;
+    routeQuery << "INSERT INTO routes (identifier, dep_hour, dep_minute, arr_hour, arr_minute, duration) "
+               << "VALUES ('" << escapeString(identifier) << "', "
+               << route.getDepartureTimeHour() << ", "
+               << route.getDepartureTimeMinute() << ", "
+               << route.getArrivalTimeHour() << ", "
+               << route.getArrivalTimeMinute() << ", "
+               << route.getDuration() << ");";
+
+    if (!executeQuery(routeQuery.str())) {
+        executeQuery("ROLLBACK;");
+        return false;
+    }
+
+    // Insert stops
     const auto& stops = route.getIntermediateStops();
     for (size_t i = 0; i < stops.size(); ++i) {
         std::stringstream stopQuery;
-        stopQuery << "INSERT OR REPLACE INTO route_stops "
-                 << "(route_id, stop_name, stop_order) VALUES ("
-                 << "'" << identifier << "', "
-                 << "'" << stops[i] << "', "
+        stopQuery << "INSERT INTO route_stops (route_id, station_name, stop_order) VALUES ('"
+                 << escapeString(identifier) << "', '"
+                 << escapeString(stops[i]) << "', "
                  << i << ");";
-        
+
         if (!executeQuery(stopQuery.str())) {
+            executeQuery("ROLLBACK;");
             return false;
         }
     }
-    
-    return true;
+
+    return executeQuery("COMMIT;");
 }
 
 bool DatabaseManager::assignTrainToRoute(int trainId, const std::vector<std::string>& routeStops) {
@@ -574,7 +580,6 @@ bool DatabaseManager::getRoutesForTrain(int trainId, std::vector<std::vector<std
     
     routes.clear();
     
-    // First, get all route_ids for this train
     std::stringstream routeQuery;
     routeQuery << "SELECT route_id FROM train_routes WHERE train_id = " << trainId << ";";
     
@@ -593,7 +598,6 @@ bool DatabaseManager::getRoutesForTrain(int trainId, std::vector<std::vector<std
     
     sqlite3_finalize(routeStmt);
     
-    // Now, for each route_id, get the stops
     for (const auto& routeId : routeIds) {
         std::stringstream stopsQuery;
         stopsQuery << "SELECT stop_name FROM route_stops WHERE route_id = '" << routeId 
@@ -622,4 +626,4 @@ bool DatabaseManager::getRoutesForTrain(int trainId, std::vector<std::vector<std
     return true;
 }
 
-} // namespace CJ
+}

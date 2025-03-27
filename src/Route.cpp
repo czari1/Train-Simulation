@@ -111,7 +111,7 @@ void Route::addIntermediateStop(const std::string& stationName) {
 }
 
 int Route::calculateTravelTime() const {
-    return m_duration + m_intermediateStops.size() * 3; // 3 minutes per intermediate stop
+    return m_duration + m_intermediateStops.size() * 3; 
 }
 
 std::string Route::getStartStation() const {
@@ -122,4 +122,4 @@ std::string Route::getEndStation() const {
     return !m_intermediateStops.empty() ? m_intermediateStops.back() : "";
 }
 
-} // namespace CJ
+} 

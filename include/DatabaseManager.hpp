@@ -19,6 +19,8 @@ namespace CJ {
 
         std::string generateRouteIdentifier(const std::vector<std::string>& stops) const;
 
+        std::string escapeString(const std::string& str) const;
+
     public:
         DatabaseManager();
         ~DatabaseManager();

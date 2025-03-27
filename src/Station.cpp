@@ -9,13 +9,13 @@ Station::Station(std::shared_ptr<Train> trainName, int platformCount,
                 const std::vector<std::shared_ptr<Route>>& intermediateStops,
                 std::shared_ptr<Train> startStation, std::shared_ptr<Train> endStation,
                 const std::string& name)
-    : m_trainName(trainName)
-    , m_platformCount(std::max(1, platformCount))  // Ensure at least 1 platform
-    , m_intermediateStops(intermediateStops)
-    , m_startStation(startStation)
-    , m_endStation(endStation)
-    , m_name(name) {
-    // Additional validation if needed
+    : m_name(name)                           
+    , m_platformCount(std::max(1, platformCount))  
+    , m_trainName(trainName)                 
+    , m_intermediateStops(intermediateStops) 
+    , m_startStation(startStation)           
+    , m_endStation(endStation)               
+{
     if (name.empty()) {
         throw std::invalid_argument("Station name cannot be empty");
     }
@@ -72,4 +72,4 @@ const std::string& Station::getName() const {
     return m_name;
 }
 
-} // namespace CJ
+}
