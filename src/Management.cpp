@@ -186,45 +186,58 @@ namespace CJ {
     }
 
     bool Management::initializeSystem() {
-        if (!m_dbManager.connect()) {
-            std::cerr << "Failed to connect to database!" << std::endl;
-            return false;
-        }
-
-        m_dbManager.loadTrains(m_trains);
-        m_dbManager.loadStations(m_stations);
-
-        if (m_trains.empty() && m_stations.empty()) {
-            // Add stations first
-            addStation(nullptr, 5, {}, nullptr, nullptr, "Warsaw Central");
-            addStation(nullptr, 4, {}, nullptr, nullptr, "Krakow Main");
-            addStation(nullptr, 3, {}, nullptr, nullptr, "Gdansk Central");
-
-            // Add trains
-            Train express("Express_101", 160, 400, 1001, 8);
-            Train intercity("InterCity_202", 140, 350, 1002, 6);
-            Train regional("Regional_303", 120, 250, 1003, 4);
-            
-            addTrain("Express_101", 160, 400, 1001, 8);
-            addTrain("InterCity_202", 140, 350, 1002, 6);
-            addTrain("Regional_303", 120, 250, 1003, 4);
-
-            // Create and save routes with calculated durations
-            std::vector<std::string> route1Stops = {"Warsaw Central", "Lodz Widzew", "Czestochowa", "Krakow Main"};
-            std::vector<std::string> route2Stops = {"Gdansk Central", "Bydgoszcz", "Poznan", "Wroclaw Main"};
-            std::vector<std::string> route3Stops = {"Warsaw Central", "Radom", "Kielce", "Krakow Main"};
-
-            try {
-                // Duration will be calculated automatically
-                addRoute(8, 30, 11, 45, express, 0, route1Stops);
-                addRoute(9, 15, 13, 30, intercity, 0, route2Stops);
-                addRoute(7, 0, 9, 30, regional, 0, route3Stops);
-            } catch (const std::runtime_error& e) {
-                std::cerr << "Failed to initialize default routes: " << e.what() << std::endl;
+        try {
+            if (!m_dbManager.connect()) {
+                std::cerr << "Failed to connect to database!" << std::endl;
+                m_dbManager.cleanupDatabase();
                 return false;
             }
+
+            m_dbManager.loadTrains(m_trains);
+            m_dbManager.loadStations(m_stations);
+
+            if (m_trains.empty() && m_stations.empty()) {
+                try {
+                    // Add stations first
+                    addStation(nullptr, 5, {}, nullptr, nullptr, "Warsaw Central");
+                    addStation(nullptr, 4, {}, nullptr, nullptr, "Krakow Main");
+                    addStation(nullptr, 3, {}, nullptr, nullptr, "Gdansk Central");
+
+                    // Add trains
+                    Train express("Express_101", 160, 400, 1001, 8);
+                    Train intercity("InterCity_202", 140, 350, 1002, 6);
+                    Train regional("Regional_303", 120, 250, 1003, 4);
+                    
+                    addTrain("Express_101", 160, 400, 1001, 8);
+                    addTrain("InterCity_202", 140, 350, 1002, 6);
+                    addTrain("Regional_303", 120, 250, 1003, 4);
+
+                    // Create and save routes with calculated durations
+                    std::vector<std::string> route1Stops = {"Warsaw Central", "Lodz Widzew", "Czestochowa", "Krakow Main"};
+                    std::vector<std::string> route2Stops = {"Gdansk Central", "Bydgoszcz", "Poznan", "Wroclaw Main"};
+                    std::vector<std::string> route3Stops = {"Warsaw Central", "Radom", "Kielce", "Krakow Main"};
+
+                    try {
+                        // Duration will be calculated automatically
+                        addRoute(8, 30, 11, 45, express, 0, route1Stops);
+                        addRoute(9, 15, 13, 30, intercity, 0, route2Stops);
+                        addRoute(7, 0, 9, 30, regional, 0, route3Stops);
+                    } catch (const std::runtime_error& e) {
+                        std::cerr << "Failed to initialize default routes: " << e.what() << std::endl;
+                        return false;
+                    }
+                } catch (const std::runtime_error& e) {
+                    std::cerr << "Failed to initialize default data: " << e.what() << std::endl;
+                    m_dbManager.cleanupDatabase();
+                    return false;
+                }
+            }
+            return true;
+        } catch (const std::exception& e) {
+            std::cerr << "System initialization failed: " << e.what() << std::endl;
+            m_dbManager.cleanupDatabase();
+            return false;
         }
-        return true;
     }
 
     std::string Management::formatStationName(const std::string& name) {

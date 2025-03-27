@@ -1,3 +1,4 @@
+
 #pragma once
 #include <vector>
 #include <string>
@@ -29,7 +30,8 @@ namespace CJ {
         bool disconnect();
         bool isConnected() const;
         bool displayDatabaseContents();
-
+        void cleanupDatabase();
+        
         bool saveTrain(const Train& train);
         bool loadTrains(std::vector<Train>& trains);
         bool deleteTrain(int id);

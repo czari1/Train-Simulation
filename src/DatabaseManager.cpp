@@ -102,6 +102,24 @@ bool DatabaseManager::executeQuery(const std::string& query) {
     return true;
 }
 
+void DatabaseManager::cleanupDatabase() {
+    std::cout << "Cleaning up database due to initialization failure...\n";
+    
+    if (m_isConnected) {
+        disconnect();
+    }
+
+    std::filesystem::path dbPath = std::filesystem::current_path() / "database" / "train_system.db";
+    if (std::filesystem::exists(dbPath)) {
+        try {
+            std::filesystem::remove(dbPath);
+            std::cout << "Database file deleted successfully.\n";
+        } catch (const std::filesystem::filesystem_error& e) {
+            std::cerr << "Failed to delete database file: " << e.what() << "\n";
+        }
+    }
+}
+
 bool DatabaseManager::prepareDatabase() {
     if (!m_isConnected) {
         std::cerr << "Database not connected" << std::endl;
@@ -123,24 +141,25 @@ bool DatabaseManager::prepareDatabase() {
         "platform_count INTEGER NOT NULL"
         ");";
     
-    std::string createRoutesTable = 
+        std::string createRoutesTable = 
         "CREATE TABLE IF NOT EXISTS routes ("
-        "identifier TEXT PRIMARY KEY,"
+        "identifier TEXT UNIQUE,"
+        "route_id INTEGER PRIMARY KEY AUTOINCREMENT,"
         "dep_hour INTEGER NOT NULL,"
         "dep_minute INTEGER NOT NULL,"
         "arr_hour INTEGER NOT NULL,"
         "arr_minute INTEGER NOT NULL,"
         "duration INTEGER NOT NULL"
         ");";
-    
+
     std::string createRouteStopsTable = 
         "CREATE TABLE IF NOT EXISTS route_stops ("
-        "route_id TEXT,"
-        "stop_name TEXT,"
+        "route_id INTEGER,"
+        "station_name TEXT,"  
         "stop_order INTEGER,"
         "PRIMARY KEY (route_id, stop_order),"
-        "FOREIGN KEY (route_id) REFERENCES routes(identifier),"
-        "FOREIGN KEY (stop_name) REFERENCES stations(name)"
+        "FOREIGN KEY (route_id) REFERENCES routes(route_id),"
+        "FOREIGN KEY (station_name) REFERENCES stations(name)"
         ");";
     
     std::string createTrainRoutesTable = 
@@ -162,7 +181,8 @@ bool DatabaseManager::prepareDatabase() {
     if (success) {
         std::cout << "Database tables created successfully!" << std::endl; 
     } else {
-        std::cerr << "Failed to create database tables!" << std::endl;
+        cleanupDatabase();
+        std::cerr << "Failed to create database tables" << std::endl;
     }
 
     return success;
